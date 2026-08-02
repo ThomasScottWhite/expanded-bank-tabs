@@ -1792,18 +1792,12 @@ public class ExpandedBankTabsPlugin extends Plugin
 
 	private void removeExpandedWidgets()
 	{
-		// Dynamic widget child arrays cannot safely be replaced. Hide the existing
-		// children and reuse the layer; the next rebuild appends the current view
-		// without invalidating the client's widget indices.
-		if (expandedLayer != null && expandedLayer.getChildren() != null)
+		// The expanded layer is a dynamic widget container. Remove its dynamic
+		// children through the Widget API before rebuilding so stale add-tab cards
+		// cannot remain visible after a tab is moved between groups.
+		if (expandedLayer != null)
 		{
-			for (Widget child : expandedLayer.getChildren())
-			{
-				if (child != null)
-				{
-					child.setHidden(true);
-				}
-			}
+			expandedLayer.deleteAllChildren();
 		}
 		clearExpandedWidgetReferences();
 	}

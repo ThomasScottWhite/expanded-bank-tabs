@@ -175,6 +175,7 @@ public class ExpandedBankTabsPlugin extends Plugin
 	private int expandedContentBottom;
 	private String previousBankTitle;
 	private boolean bankTagsRefreshPending;
+	private boolean expandedRebuildQueued;
 
 	@Override
 	protected void startUp()
@@ -249,7 +250,7 @@ public class ExpandedBankTabsPlugin extends Plugin
 			ensureExpandedLayer();
 			if (panel == null)
 			{
-				rebuildExpandedView();
+				requestExpandedViewRebuild();
 			}
 		}
 		ensureExpandedScrollbar();
@@ -363,7 +364,7 @@ public class ExpandedBankTabsPlugin extends Plugin
 		{
 			groupManager.move(groupHeaders.get(sourceGroupWidget), dropTarget.groupId);
 			client.setDraggedOnWidget(null);
-			clientThread.invokeLater(this::rebuildExpandedView);
+			requestExpandedViewRebuild();
 			return;
 		}
 
@@ -387,7 +388,7 @@ public class ExpandedBankTabsPlugin extends Plugin
 			client.setDraggedOnWidget(null);
 			if (changed)
 			{
-				clientThread.invokeLater(this::rebuildExpandedView);
+				requestExpandedViewRebuild();
 			}
 		}
 	}
@@ -419,7 +420,7 @@ public class ExpandedBankTabsPlugin extends Plugin
 			// action (rename/view) win instead.
 			if (!client.isMenuOpen() && !client.isDraggingWidget() && client.getMouseCurrentButton() == 0)
 			{
-				rebuildExpandedView();
+				requestExpandedViewRebuild();
 			}
 		}
 		else
@@ -600,6 +601,9 @@ public class ExpandedBankTabsPlugin extends Plugin
 			// Dynamic widget child arrays must not be replaced while the client is
 			// traversing the interface. Hide the layer and leave it attached until
 			// the bank interface itself is unloaded.
+			expandedLayer.setOriginalWidth(0);
+			expandedLayer.setOriginalHeight(0);
+			expandedLayer.setNoClickThrough(true);
 			expandedLayer.setHidden(true);
 			expandedLayer.revalidate();
 		}
@@ -1078,6 +1082,24 @@ public class ExpandedBankTabsPlugin extends Plugin
 		expandedContentBottom = createY + createGroup.getOriginalHeight();
 		applyExpandedScroll();
 		ensureExpandedScrollbar();
+	}
+
+	private void requestExpandedViewRebuild()
+	{
+		if (!expandedViewVisible || !config.enabled() || expandedRebuildQueued)
+		{
+			return;
+		}
+
+		expandedRebuildQueued = true;
+		clientThread.invokeLater(() ->
+		{
+			expandedRebuildQueued = false;
+			if (expandedViewVisible && config.enabled())
+			{
+				rebuildExpandedView();
+			}
+		});
 	}
 
 	private int renderGroup(String name, String groupId, List<BankTab> tabs, boolean collapsed,
@@ -1855,6 +1877,12 @@ public class ExpandedBankTabsPlugin extends Plugin
 			if (layer != null)
 			{
 				layer.deleteAllChildren();
+				// Bank Tags may run a layout pass after this cleanup and restore a
+				// detached layer's hidden state. A zero-sized retired layer keeps it
+				// from rendering while preserving the stable parent widget structure.
+				layer.setOriginalWidth(0);
+				layer.setOriginalHeight(0);
+				layer.setNoClickThrough(true);
 				layer.setHidden(true);
 				layer.revalidate();
 			}

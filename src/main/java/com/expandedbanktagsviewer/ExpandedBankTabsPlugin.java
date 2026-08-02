@@ -148,6 +148,8 @@ public class ExpandedBankTabsPlugin extends Plugin
 	private ExpandedBankTabsConfig config;
 
 	private Widget parent;
+	private Widget expandedLayer;
+	private Widget expandedLayerParent;
 	private Widget panel;
 	private Widget originalNewTab;
 	private Widget toggleLayerParent;
@@ -234,6 +236,14 @@ public class ExpandedBankTabsPlugin extends Plugin
 
 		ensureToggle();
 		positionToggleOverlay();
+		if (expandedViewVisible && config.enabled())
+		{
+			ensureExpandedLayer();
+			if (panel == null)
+			{
+				rebuildExpandedView();
+			}
+		}
 		ensureExpandedScrollbar();
 		updateScrollFromMouse();
 		boolean mouseDown = client.getMouseCurrentButton() == 1;
@@ -265,11 +275,11 @@ public class ExpandedBankTabsPlugin extends Plugin
 		if (event.getGroupId() == InterfaceID.BANKMAIN && event.isUnload())
 		{
 			restoreBankItems();
+			removeExpandedWidgets();
+			removeExpandedLayer();
 			removeToggleOverlay();
 			restoreOriginalNewTab();
-			ownedWidgets.clear();
 			parent = null;
-			panel = null;
 			expandedViewVisible = false;
 			expandedScrollOffset = 0;
 			previousBankTitle = null;
@@ -443,14 +453,22 @@ public class ExpandedBankTabsPlugin extends Plugin
 
 	private void restoreExpandedViewAfterBankTagsLayout()
 	{
-		if (!expandedViewVisible || !config.enabled() || panel == null)
+		if (!expandedViewVisible || !config.enabled() || expandedLayer == null)
 		{
 			return;
 		}
 
-		panel.setHidden(false);
-		panel.revalidate();
-		applyExpandedScroll();
+		// The expanded widgets live below this layer, outside the direct child
+		// range that Bank Tags lays out for its sidebar. Only the layer itself
+		// needs to be made visible after a sidebar draw.
+		expandedLayer.setHidden(false);
+		expandedLayer.revalidate();
+		if (panel != null)
+		{
+			panel.setHidden(false);
+			panel.revalidate();
+			applyExpandedScroll();
+		}
 	}
 
 	private Widget getLiveNewTabWidget()
@@ -466,10 +484,24 @@ public class ExpandedBankTabsPlugin extends Plugin
 	private Widget findToggleLayerParent()
 	{
 		Widget layer = findLayerAncestor(client.getWidget(InterfaceID.Bankmain.UNIVERSE));
-		if (layer == null)
+		if (layer != null && layer != parent)
 		{
-			layer = findLayerAncestor(parent);
+			return layer;
 		}
+
+		Widget current = parent == null ? null : parent.getParent();
+		while (current != null)
+		{
+			if (current.getType() == WidgetType.LAYER)
+			{
+				return current;
+			}
+			current = current.getParent();
+		}
+
+		// This fallback preserves the previous behavior on client layouts that do
+		// not expose a separate ancestor layer, although the normal Bank interface
+		// path uses the Bankmain universe layer above the sidebar container.
 		return layer;
 	}
 
@@ -485,6 +517,64 @@ public class ExpandedBankTabsPlugin extends Plugin
 			current = current.getParent();
 		}
 		return null;
+	}
+
+	private boolean ensureExpandedLayer()
+	{
+		if (!expandedViewVisible || !config.enabled() || parent == null || toggleLayerParent == null)
+		{
+			return false;
+		}
+
+		Widget[] layerChildren = expandedLayerParent == null ? null : expandedLayerParent.getChildren();
+		boolean attached = expandedLayer != null && expandedLayerParent == toggleLayerParent && layerChildren != null
+			&& Arrays.stream(layerChildren).anyMatch(child -> child == expandedLayer);
+		if (!attached)
+		{
+			removeExpandedLayer();
+			clearExpandedWidgetReferences();
+			expandedLayer = toggleLayerParent.createChild(-1, WidgetType.LAYER);
+			expandedLayerParent = toggleLayerParent;
+		}
+
+		Point relativeLocation = getRelativeLocation(parent, toggleLayerParent);
+		if (relativeLocation != null)
+		{
+			expandedLayer.setOriginalX(relativeLocation.getX());
+			expandedLayer.setOriginalY(relativeLocation.getY());
+		}
+		else
+		{
+			Point parentLocation = parent.getCanvasLocation();
+			Point layerLocation = toggleLayerParent.getCanvasLocation();
+			if (parentLocation == null || layerLocation == null)
+			{
+				return false;
+			}
+			expandedLayer.setOriginalX(parentLocation.getX() - layerLocation.getX());
+			expandedLayer.setOriginalY(parentLocation.getY() - layerLocation.getY());
+		}
+
+		expandedLayer.setOriginalWidth(Math.max(1, parent.getWidth()));
+		expandedLayer.setOriginalHeight(Math.max(1, parent.getHeight()));
+		expandedLayer.setNoClickThrough(false);
+		expandedLayer.setHidden(false);
+		expandedLayer.revalidate();
+		return true;
+	}
+
+	private void removeExpandedLayer()
+	{
+		if (expandedLayer != null)
+		{
+			expandedLayer.setChildren(null);
+		}
+		if (expandedLayerParent != null && expandedLayer != null)
+		{
+			removeChild(expandedLayerParent, expandedLayer);
+		}
+		expandedLayer = null;
+		expandedLayerParent = null;
 	}
 
 	private void ensureToggleOverlay()
@@ -839,6 +929,7 @@ public class ExpandedBankTabsPlugin extends Plugin
 		{
 			restoreBankItems();
 			removeExpandedWidgets();
+			removeExpandedLayer();
 			removeExpandedScrollbar();
 			updateToggle();
 		}
@@ -851,6 +942,11 @@ public class ExpandedBankTabsPlugin extends Plugin
 			return;
 		}
 
+		if (!ensureExpandedLayer())
+		{
+			return;
+		}
+
 		removeExpandedWidgets();
 		hideBankItems();
 		updateExpandedTitle();
@@ -859,7 +955,7 @@ public class ExpandedBankTabsPlugin extends Plugin
 		int panelX = TAB_WIDTH + 2;
 		int width = Math.max(1, parent.getWidth() - panelX);
 		int height = Math.max(1, parent.getHeight() - BANK_BOTTOM_OFFSET - PANEL_TOP);
-		panel = parent.createChild(-1, WidgetType.RECTANGLE);
+		panel = expandedLayer.createChild(-1, WidgetType.RECTANGLE);
 		ownedWidgets.add(panel);
 		panel.setOriginalX(panelX);
 		panel.setOriginalY(PANEL_TOP);
@@ -1449,7 +1545,7 @@ public class ExpandedBankTabsPlugin extends Plugin
 	private Widget createGraphic(Widget container, String name, int spriteId, int itemId,
 		int width, int height, int x, int y)
 	{
-		Widget widget = container.createChild(-1, WidgetType.GRAPHIC);
+		Widget widget = expandedLayer.createChild(-1, WidgetType.GRAPHIC);
 		ownedWidgets.add(widget);
 		widget.setOriginalX(x);
 		widget.setOriginalY(y);
@@ -1469,7 +1565,7 @@ public class ExpandedBankTabsPlugin extends Plugin
 
 	private Widget createText(String text, int x, int y, int width, int height, Color color)
 	{
-		Widget widget = parent.createChild(-1, WidgetType.TEXT);
+		Widget widget = expandedLayer.createChild(-1, WidgetType.TEXT);
 		ownedWidgets.add(widget);
 		widget.setOriginalX(x);
 		widget.setOriginalY(y);
@@ -1647,25 +1743,22 @@ public class ExpandedBankTabsPlugin extends Plugin
 
 	private void removeExpandedWidgets()
 	{
-		if (parent == null)
+		if (expandedLayer == null)
 		{
+			clearExpandedWidgetReferences();
 			return;
 		}
 
-		List<Widget> keep = new ArrayList<>();
-		Widget[] children = parent.getChildren();
+		Widget[] children = expandedLayer.getChildren();
 		if (children != null)
 		{
-			for (Widget child : children)
-			{
-				if (child != null && child != panel && !ownedWidgets.contains(child))
-				{
-					keep.add(child);
-				}
-			}
+			expandedLayer.setChildren(null);
 		}
+		clearExpandedWidgetReferences();
+	}
 
-		replaceChildren(children, keep);
+	private void clearExpandedWidgetReferences()
+	{
 		ownedWidgets.clear();
 		panel = null;
 		tabWidgets.clear();
@@ -1677,6 +1770,8 @@ public class ExpandedBankTabsPlugin extends Plugin
 
 	private void removeOwnedWidgets()
 	{
+		removeExpandedWidgets();
+		removeExpandedLayer();
 		removeToggleOverlay();
 		restoreOriginalNewTab();
 		if (parent != null)
@@ -1695,13 +1790,7 @@ public class ExpandedBankTabsPlugin extends Plugin
 			}
 			replaceChildren(children, keep);
 		}
-		ownedWidgets.clear();
-		tabWidgets.clear();
-		groupHeaders.clear();
-		groupDropTargets.clear();
-		groupDropAreas.clear();
-		scrollBaseY.clear();
-		panel = null;
+		clearExpandedWidgetReferences();
 	}
 
 	private void replaceChildren(Widget[] existingChildren, List<Widget> replacement)

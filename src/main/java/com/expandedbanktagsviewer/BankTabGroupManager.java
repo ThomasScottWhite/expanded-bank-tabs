@@ -222,6 +222,28 @@ final class BankTabGroupManager
 		{
 			return false;
 		}
+		String sourceGroupId = getGroupId(source);
+		if (equalsNullable(sourceGroupId, targetGroupId))
+		{
+			if (targetGroup == null)
+			{
+				if (!ungroupedTabs.contains(source))
+				{
+					ungroupedTabs.add(source);
+				}
+				if (!ungroupedTabs.contains(target))
+				{
+					ungroupedTabs.add(target);
+				}
+				swap(ungroupedTabs, source, target);
+			}
+			else
+			{
+				swap(targetGroup.getTabs(), source, target);
+			}
+			save();
+			return true;
+		}
 
 		removeFromGroups(source);
 		if (targetGroupId == null)
@@ -431,6 +453,22 @@ final class BankTabGroupManager
 		{
 			values.add(targetIndex, source);
 		}
+	}
+
+	private static void swap(List<String> values, String first, String second)
+	{
+		int firstIndex = values.indexOf(first);
+		int secondIndex = values.indexOf(second);
+		if (firstIndex >= 0 && secondIndex >= 0 && firstIndex != secondIndex)
+		{
+			values.set(firstIndex, second);
+			values.set(secondIndex, first);
+		}
+	}
+
+	private static boolean equalsNullable(String first, String second)
+	{
+		return first == null ? second == null : first.equals(second);
 	}
 
 	private boolean hasName(String name, String ignoredId)

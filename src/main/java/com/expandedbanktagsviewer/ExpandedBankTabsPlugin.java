@@ -106,7 +106,8 @@ public class ExpandedBankTabsPlugin extends Plugin
 	private static final int MENU_EXPORT = 4;
 	private static final int MENU_RENAME = 5;
 	private static final int MENU_DELETE = 6;
-	private static final int MENU_NEW_TAB = 2;
+	private static final int TOGGLE_OP = 1;
+	private static final int NEW_TAB_OP = 2;
 	private static final int GROUP_MENU_RENAME = 1;
 	private static final int GROUP_MENU_DELETE = 2;
 	private static final int GROUP_MENU_COLLAPSE = 3;
@@ -688,8 +689,8 @@ public class ExpandedBankTabsPlugin extends Plugin
 		toggleHitbox.setItemId(-1);
 		toggleHitbox.setItemQuantity(-1);
 		toggleHitbox.setName("");
-		toggleHitbox.setAction(1, TOGGLE);
-		toggleHitbox.setAction(MENU_NEW_TAB, NEW_TAB);
+		toggleHitbox.setAction(TOGGLE_OP, TOGGLE);
+		toggleHitbox.setAction(NEW_TAB_OP, NEW_TAB);
 		toggleHitbox.setHasListener(true);
 		toggleHitbox.setNoClickThrough(true);
 		toggleHitbox.setOnOpListener((JavaScriptCallback) this::handleToggleOp);
@@ -716,8 +717,8 @@ public class ExpandedBankTabsPlugin extends Plugin
 			: TabSprites.TAB_BACKGROUND.getSpriteId());
 		toggle.setHasListener(true);
 		toggle.setNoClickThrough(false);
-		toggleHitbox.setAction(1, TOGGLE);
-		toggleHitbox.setAction(MENU_NEW_TAB, NEW_TAB);
+		toggleHitbox.setAction(TOGGLE_OP, TOGGLE);
+		toggleHitbox.setAction(NEW_TAB_OP, NEW_TAB);
 		toggleHitbox.setHasListener(true);
 		toggleHitbox.setNoClickThrough(true);
 		toggle.setItemId(-1);
@@ -925,12 +926,14 @@ public class ExpandedBankTabsPlugin extends Plugin
 
 	private void handleToggleOp(ScriptEvent event)
 	{
+		// Widget callbacks report the operation one above the action slot. This
+		// matches the convention used by Bank Tags' own widget callbacks.
 		switch (event.getOp() - 1)
 		{
-			case 0:
+			case TOGGLE_OP:
 				handleToggleClick();
 				break;
-			case MENU_NEW_TAB - 1:
+			case NEW_TAB_OP:
 				handleNewTabFromToggle();
 				break;
 			default:

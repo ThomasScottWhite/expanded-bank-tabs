@@ -176,6 +176,7 @@ public class ExpandedBankTabsPlugin extends Plugin
 	private String previousBankTitle;
 	private boolean bankTagsRefreshPending;
 	private boolean expandedRebuildQueued;
+	private boolean recreateExpandedLayerOnRebuild;
 
 	@Override
 	protected void startUp()
@@ -364,7 +365,7 @@ public class ExpandedBankTabsPlugin extends Plugin
 		{
 			groupManager.move(groupHeaders.get(sourceGroupWidget), dropTarget.groupId);
 			client.setDraggedOnWidget(null);
-			requestExpandedViewRebuild();
+			requestFreshExpandedViewRebuild();
 			return;
 		}
 
@@ -388,7 +389,7 @@ public class ExpandedBankTabsPlugin extends Plugin
 			client.setDraggedOnWidget(null);
 			if (changed)
 			{
-				requestExpandedViewRebuild();
+				requestFreshExpandedViewRebuild();
 			}
 		}
 	}
@@ -1095,11 +1096,26 @@ public class ExpandedBankTabsPlugin extends Plugin
 		clientThread.invokeLater(() ->
 		{
 			expandedRebuildQueued = false;
+			boolean recreateLayer = recreateExpandedLayerOnRebuild;
+			recreateExpandedLayerOnRebuild = false;
 			if (expandedViewVisible && config.enabled())
 			{
+				if (recreateLayer)
+				{
+					// Ordering changes get a completely new render layer. Retiring the
+					// previous layer prevents any old icon, header, or menu hitbox from
+					// being reused at its former position.
+					removeExpandedLayer();
+				}
 				rebuildExpandedView();
 			}
 		});
+	}
+
+	private void requestFreshExpandedViewRebuild()
+	{
+		recreateExpandedLayerOnRebuild = true;
+		requestExpandedViewRebuild();
 	}
 
 	private int renderGroup(String name, String groupId, List<BankTab> tabs, boolean collapsed,

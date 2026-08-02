@@ -109,7 +109,6 @@ public class ExpandedBankTabsPlugin extends Plugin
 	private static final int GROUP_MENU_DELETE = 2;
 	private static final int GROUP_MENU_COLLAPSE = 3;
 
-	private final List<Widget> ownedWidgets = new ArrayList<>();
 	private final Map<Widget, String> tabWidgets = new IdentityHashMap<>();
 	private final Map<Widget, String> groupHeaders = new IdentityHashMap<>();
 	private final Map<Widget, String> groupDropTargets = new IdentityHashMap<>();
@@ -393,7 +392,7 @@ public class ExpandedBankTabsPlugin extends Plugin
 			// whether the current mouse press is a click or a drag. Rebuilding
 			// here destroys the original drag source and makes its normal op
 			// action (rename/view) win instead.
-			if (!client.isDraggingWidget() && client.getMouseCurrentButton() == 0)
+			if (!client.isMenuOpen() && !client.isDraggingWidget() && client.getMouseCurrentButton() == 0)
 			{
 				rebuildExpandedView();
 			}
@@ -570,9 +569,13 @@ public class ExpandedBankTabsPlugin extends Plugin
 
 	private void removeExpandedLayer()
 	{
-		if (expandedLayerParent != null && expandedLayer != null)
+		if (expandedLayer != null)
 		{
-			removeChild(expandedLayerParent, expandedLayer);
+			// Dynamic widget child arrays must not be replaced while the client is
+			// traversing the interface. Hide the layer and leave it attached until
+			// the bank interface itself is unloaded.
+			expandedLayer.setHidden(true);
+			expandedLayer.revalidate();
 		}
 		expandedLayer = null;
 		expandedLayerParent = null;
@@ -762,9 +765,10 @@ public class ExpandedBankTabsPlugin extends Plugin
 	private void removeToggleOverlay()
 	{
 		removeExpandedScrollbar();
-		if (toggleLayerParent != null && toggleLayer != null)
+		if (toggleLayer != null)
 		{
-			removeChild(toggleLayerParent, toggleLayer);
+			toggleLayer.setHidden(true);
+			toggleLayer.revalidate();
 		}
 		toggleLayer = null;
 		toggle = null;
@@ -831,9 +835,10 @@ public class ExpandedBankTabsPlugin extends Plugin
 
 	private void removeExpandedScrollbar()
 	{
-		if (toggleLayerParent != null && expandedScrollbar != null)
+		if (expandedScrollbar != null)
 		{
-			removeChild(toggleLayerParent, expandedScrollbar);
+			expandedScrollbar.setHidden(true);
+			expandedScrollbar.revalidate();
 		}
 		expandedScrollbar = null;
 	}
@@ -957,7 +962,6 @@ public class ExpandedBankTabsPlugin extends Plugin
 		int width = Math.max(1, parent.getWidth() - panelX);
 		int height = Math.max(1, parent.getHeight() - BANK_BOTTOM_OFFSET - PANEL_TOP);
 		panel = expandedLayer.createChild(-1, WidgetType.RECTANGLE);
-		ownedWidgets.add(panel);
 		panel.setOriginalX(panelX);
 		panel.setOriginalY(PANEL_TOP);
 		panel.setOriginalWidth(width);
@@ -1556,7 +1560,6 @@ public class ExpandedBankTabsPlugin extends Plugin
 		int width, int height, int x, int y)
 	{
 		Widget widget = expandedLayer.createChild(-1, WidgetType.GRAPHIC);
-		ownedWidgets.add(widget);
 		widget.setOriginalX(x);
 		widget.setOriginalY(y);
 		widget.setOriginalWidth(width);
@@ -1576,7 +1579,6 @@ public class ExpandedBankTabsPlugin extends Plugin
 	private Widget createText(String text, int x, int y, int width, int height, Color color)
 	{
 		Widget widget = expandedLayer.createChild(-1, WidgetType.TEXT);
-		ownedWidgets.add(widget);
 		widget.setOriginalX(x);
 		widget.setOriginalY(y);
 		widget.setOriginalWidth(width);
@@ -1753,17 +1755,24 @@ public class ExpandedBankTabsPlugin extends Plugin
 
 	private void removeExpandedWidgets()
 	{
-		// Dynamic widgets cannot safely have their child array replaced. Remove
-		// the whole dynamic layer from its static interface parent instead; its
-		// dynamic descendants are discarded with it and a fresh layer is created
-		// when the view is rebuilt.
-		removeExpandedLayer();
+		// Dynamic widget child arrays cannot safely be replaced. Hide the existing
+		// children and reuse the layer; the next rebuild appends the current view
+		// without invalidating the client's widget indices.
+		if (expandedLayer != null && expandedLayer.getChildren() != null)
+		{
+			for (Widget child : expandedLayer.getChildren())
+			{
+				if (child != null)
+				{
+					child.setHidden(true);
+				}
+			}
+		}
 		clearExpandedWidgetReferences();
 	}
 
 	private void clearExpandedWidgetReferences()
 	{
-		ownedWidgets.clear();
 		panel = null;
 		tabWidgets.clear();
 		groupHeaders.clear();
@@ -1778,77 +1787,7 @@ public class ExpandedBankTabsPlugin extends Plugin
 		removeExpandedLayer();
 		removeToggleOverlay();
 		restoreOriginalNewTab();
-		if (parent != null)
-		{
-			List<Widget> keep = new ArrayList<>();
-			Widget[] children = parent.getChildren();
-			if (children != null)
-			{
-				for (Widget child : children)
-				{
-					if (child != null && !ownedWidgets.contains(child))
-					{
-						keep.add(child);
-					}
-				}
-			}
-			replaceChildren(children, keep);
-		}
 		clearExpandedWidgetReferences();
-	}
-
-	private void replaceChildren(Widget[] existingChildren, List<Widget> replacement)
-	{
-		replaceChildren(parent, existingChildren, replacement);
-	}
-
-	private void removeChild(Widget container, Widget child)
-	{
-		if (container == null || child == null)
-		{
-			return;
-		}
-		Widget[] children = container.getChildren();
-		if (children == null)
-		{
-			return;
-		}
-		List<Widget> keep = new ArrayList<>();
-		for (Widget current : children)
-		{
-			if (current != null && current != child)
-			{
-				keep.add(current);
-			}
-		}
-		replaceChildren(container, children, keep);
-	}
-
-	private void replaceChildren(Widget container, Widget[] existingChildren, List<Widget> replacement)
-	{
-		if (container == null)
-		{
-			return;
-		}
-		if (replacement.isEmpty())
-		{
-			container.setChildren(null);
-			return;
-		}
-
-		if (existingChildren == null)
-		{
-			return;
-		}
-
-		// The client implementation expects the obfuscated runtime array type,
-		// not a newly allocated Widget[]. Arrays.copyOf preserves that type.
-		Widget[] typedChildren = Arrays.copyOf(existingChildren, replacement.size());
-		for (int i = 0; i < replacement.size(); i++)
-		{
-			typedChildren[i] = replacement.get(i);
-		}
-		container.setChildren(typedChildren);
 	}
 
 	private void restoreBankTitle()

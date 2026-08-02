@@ -59,7 +59,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 @PluginDescriptor(
-	name = "expandedbanktagsviewer",
+	name = "Expanded Bank Tags Viewer",
 	description = "Organize existing Bank Tags tabs into an expanded, grouped view.",
 	tags = {"bank", "bank tags", "bank tabs", "organization"}
 )
@@ -85,7 +85,7 @@ public class ExpandedBankTabsPlugin extends Plugin
 	private static final String DELETE_GROUP = "Delete bank tab group";
 	private static final String COLLAPSE_GROUP = "Collapse bank tab group";
 	private static final String EXPAND_GROUP = "Expand bank tab group";
-	private static final String EXPANDED_TITLE = "expandedbanktagsviewer";
+	private static final String EXPANDED_TITLE = "Expanded Bank Tags Viewer";
 
 	private static final int TAB_WIDTH = 39;
 	private static final int TAB_HEIGHT = 39;

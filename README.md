@@ -1,6 +1,6 @@
-# expandedbanktagsviewer
+# Expanded Bank Tags Viewer
 
-expandedbanktagsviewer gives RuneLite's existing Bank Tags tabs an expanded,
+Expanded Bank Tags Viewer gives RuneLite's existing Bank Tags tabs an expanded,
 grouped view. It keeps Bank Tags as the source of truth and adds organization
 tools without replacing the normal bank interface.
 
@@ -14,7 +14,7 @@ tools without replacing the normal bank interface.
 
 ## Usage
 
-Enable both **Bank Tags** and **expandedbanktagsviewer**, then open a bank and
+Enable both **Bank Tags** and **Expanded Bank Tags Viewer**, then open a bank and
 select the chest button in the bank tab sidebar. Use **Create group** and the
 group controls to organize your tabs.
 

@@ -9,7 +9,7 @@ public interface ExpandedBankTabsConfig extends Config
 {
 	@ConfigItem(
 		keyName = "enabled",
-		name = "Enable expanded bank tabs",
+		name = "Enable Expanded Bank Tags Viewer",
 		description = "Show the expanded bank tabs button while a bank is open.",
 		position = 1
 	)

@@ -565,10 +565,6 @@ public class ExpandedBankTabsPlugin extends Plugin
 
 	private void removeExpandedLayer()
 	{
-		if (expandedLayer != null)
-		{
-			expandedLayer.setChildren(null);
-		}
 		if (expandedLayerParent != null && expandedLayer != null)
 		{
 			removeChild(expandedLayerParent, expandedLayer);
@@ -942,12 +938,12 @@ public class ExpandedBankTabsPlugin extends Plugin
 			return;
 		}
 
+		removeExpandedWidgets();
 		if (!ensureExpandedLayer())
 		{
 			return;
 		}
 
-		removeExpandedWidgets();
 		hideBankItems();
 		updateExpandedTitle();
 		updateToggle();
@@ -1743,17 +1739,11 @@ public class ExpandedBankTabsPlugin extends Plugin
 
 	private void removeExpandedWidgets()
 	{
-		if (expandedLayer == null)
-		{
-			clearExpandedWidgetReferences();
-			return;
-		}
-
-		Widget[] children = expandedLayer.getChildren();
-		if (children != null)
-		{
-			expandedLayer.setChildren(null);
-		}
+		// Dynamic widgets cannot safely have their child array replaced. Remove
+		// the whole dynamic layer from its static interface parent instead; its
+		// dynamic descendants are discarded with it and a fresh layer is created
+		// when the view is rebuilt.
+		removeExpandedLayer();
 		clearExpandedWidgetReferences();
 	}
 

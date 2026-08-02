@@ -1,0 +1,58 @@
+plugins {
+	id 'java'
+}
+
+repositories {
+	mavenLocal()
+	maven {
+		url = 'https://repo.runelite.net'
+		content {
+			includeGroupByRegex("net\\.runelite.*")
+		}
+	}
+	mavenCentral()
+}
+
+def runeLiteVersion = providers.gradleProperty('runeLiteVersion').orElse('latest.release').get()
+def localClientJar = providers.gradleProperty('runeLiteClientJar')
+def localClientClasses = providers.gradleProperty('runeLiteClientClasses')
+def runProfile = providers.gradleProperty('runeLiteProfile').orElse('expanded-bank-tabs-dev').get()
+def runHome = providers.gradleProperty('runeLiteHome')
+
+dependencies {
+	// Local development can compile against the shaded client produced by the
+	// RuneLite fork. Plugin Hub replaces this with its normal client dependency.
+	if (localClientClasses.isPresent()) {
+		compileOnly files(localClientClasses.get())
+		testImplementation files(localClientClasses.get())
+	} else if (localClientJar.isPresent()) {
+		compileOnly files(localClientJar.get())
+		testImplementation files(localClientJar.get())
+	} else {
+		compileOnly group: 'net.runelite', name: 'client', version: runeLiteVersion
+		testImplementation group: 'net.runelite', name: 'client', version: runeLiteVersion
+	}
+}
+
+group = 'com.comfy'
+version = '0.1.0-SNAPSHOT'
+
+tasks.withType(JavaCompile).configureEach {
+	options.encoding = 'UTF-8'
+	options.release.set(11)
+	options.fork = true
+}
+
+tasks.register('run', JavaExec) {
+	dependsOn tasks.named('testClasses')
+	if (!localClientJar.isPresent()) {
+		throw new GradleException('The run task needs -PruneLiteClientJar=<path-to-client-shaded.jar> for local development.')
+	}
+	classpath = sourceSets.test.runtimeClasspath + files(localClientJar.get())
+	mainClass = 'com.comfy.expandedbanktabs.ExpandedBankTabsTest'
+	jvmArgs '-ea'
+	if (runHome.isPresent()) {
+		systemProperty 'user.home', runHome.get()
+	}
+	args '--developer-mode', '--debug', '--disable-telemetry', '--profile', runProfile
+}

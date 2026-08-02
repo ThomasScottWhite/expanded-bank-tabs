@@ -89,7 +89,10 @@ public class ExpandedBankTabsPlugin extends Plugin
 
 	private static final int TAB_WIDTH = 39;
 	private static final int TAB_HEIGHT = 39;
-	private static final int PANEL_TOP = 34;
+	// Bank Tags reserves the first 41 pixels of the item container for the
+	// sidebar's top controls. Start the expanded content below that same row so
+	// the first group header is not covered by the bank-tab strip.
+	private static final int PANEL_TOP = 41;
 	private static final int BANK_BOTTOM_OFFSET = 39;
 	private static final int TILE_WIDTH = 39;
 	private static final int TILE_HEIGHT = 40;
@@ -315,7 +318,9 @@ public class ExpandedBankTabsPlugin extends Plugin
 				// selected Bank Tag. Closing here first destroys that callback source.
 				return;
 			}
-			setExpandedViewVisible(false);
+			// Do not remove the dynamic layer while RuneLite is still traversing
+			// the widget tree for this menu action. The next client tick is safe.
+			clientThread.invokeLater(() -> setExpandedViewVisible(false));
 		}
 	}
 
@@ -346,7 +351,7 @@ public class ExpandedBankTabsPlugin extends Plugin
 		{
 			groupManager.move(groupHeaders.get(sourceGroupWidget), dropTarget.groupId);
 			client.setDraggedOnWidget(null);
-			rebuildExpandedView();
+			clientThread.invokeLater(this::rebuildExpandedView);
 			return;
 		}
 
@@ -359,7 +364,7 @@ public class ExpandedBankTabsPlugin extends Plugin
 				groupManager.assign(tag, destination);
 			}
 			client.setDraggedOnWidget(null);
-			rebuildExpandedView();
+			clientThread.invokeLater(this::rebuildExpandedView);
 		}
 	}
 
@@ -658,7 +663,7 @@ public class ExpandedBankTabsPlugin extends Plugin
 		toggleHitbox.setAction(1, TOGGLE);
 		toggleHitbox.setHasListener(true);
 		toggleHitbox.setNoClickThrough(true);
-		toggleHitbox.setOnOpListener((JavaScriptCallback) event -> handleToggleClick());
+		toggleHitbox.setOnOpListener((JavaScriptCallback) event -> clientThread.invokeLater(this::handleToggleClick));
 		toggleHitbox.setOnMouseOverListener((JavaScriptCallback) event ->
 		{
 			toggle.setSpriteId(TabSprites.TAB_BACKGROUND_ACTIVE.getSpriteId());
@@ -1160,13 +1165,11 @@ public class ExpandedBankTabsPlugin extends Plugin
 		switch (event.getOp() - 1)
 		{
 			case MENU_VIEW:
-				setExpandedViewVisible(false);
-				client.setVarbit(VarbitID.BANK_CURRENTTAB, 0);
-				if (bankTagsService != null)
-				{
-					bankTagsService.openBankTag(tag, BankTagsService.OPTION_ALLOW_MODIFICATIONS);
-				}
-				client.playSoundEffect(SoundEffectID.UI_BOOP);
+				// The callback runs while the client is traversing the clicked widget.
+				// Defer both the layer removal and Bank Tags transition until that
+				// traversal has completed, otherwise the widget array can be resized
+				// underneath the client and crash.
+				clientThread.invokeLater(() -> openBankTagFromExpandedView(tag));
 				break;
 			case MENU_CHANGE_ICON:
 				itemSearch.tooltipText(CHANGE_ICON + " (" + tag + ")")
@@ -1174,7 +1177,7 @@ public class ExpandedBankTabsPlugin extends Plugin
 					.build();
 				break;
 			case MENU_LAYOUT:
-				toggleLayout(tag);
+				clientThread.invokeLater(() -> toggleLayout(tag));
 				break;
 			case MENU_EXPORT:
 				exportTab(tag);
@@ -1183,11 +1186,22 @@ public class ExpandedBankTabsPlugin extends Plugin
 				renameTab(tag);
 				break;
 			case MENU_DELETE:
-				deleteTab(tag);
+				clientThread.invokeLater(() -> deleteTab(tag));
 				break;
 			default:
 				break;
 		}
+	}
+
+	private void openBankTagFromExpandedView(String tag)
+	{
+		setExpandedViewVisible(false);
+		client.setVarbit(VarbitID.BANK_CURRENTTAB, 0);
+		if (bankTagsService != null)
+		{
+			bankTagsService.openBankTag(tag, BankTagsService.OPTION_ALLOW_MODIFICATIONS);
+		}
+		client.playSoundEffect(SoundEffectID.UI_BOOP);
 	}
 
 	private void handleGroupOp(ScriptEvent event)
@@ -1216,7 +1230,7 @@ public class ExpandedBankTabsPlugin extends Plugin
 				break;
 			case GROUP_MENU_COLLAPSE:
 				groupManager.toggleCollapsed(group.getId());
-				rebuildExpandedView();
+				clientThread.invokeLater(this::rebuildExpandedView);
 				break;
 			default:
 				break;

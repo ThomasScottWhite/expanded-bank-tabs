@@ -168,6 +168,7 @@ public class ExpandedBankTabsPlugin extends Plugin
 	private boolean originalNewTabStateCaptured;
 	private boolean expandedViewVisible;
 	private int lastToggleHandledTick = -1;
+	private int lastNewTabHandledTick = -1;
 	private boolean toggleMouseDown;
 	private int expandedScrollOffset;
 	private int expandedContentBottom;
@@ -310,7 +311,7 @@ public class ExpandedBankTabsPlugin extends Plugin
 			if (NEW_TAB.equals(option))
 			{
 				event.consume();
-				clientThread.invokeLater(() -> createBankTab(null));
+				clientThread.invokeLater(this::handleNewTabFromToggle);
 				return;
 			}
 		}
@@ -691,7 +692,7 @@ public class ExpandedBankTabsPlugin extends Plugin
 		toggleHitbox.setAction(MENU_NEW_TAB, NEW_TAB);
 		toggleHitbox.setHasListener(true);
 		toggleHitbox.setNoClickThrough(true);
-		toggleHitbox.setOnOpListener((JavaScriptCallback) event -> clientThread.invokeLater(this::handleToggleClick));
+		toggleHitbox.setOnOpListener((JavaScriptCallback) this::handleToggleOp);
 		toggleHitbox.setOnMouseOverListener((JavaScriptCallback) event ->
 		{
 			toggle.setSpriteId(TabSprites.TAB_BACKGROUND_ACTIVE.getSpriteId());
@@ -920,6 +921,32 @@ public class ExpandedBankTabsPlugin extends Plugin
 		}
 		lastToggleHandledTick = tick;
 		toggleExpandedView();
+	}
+
+	private void handleToggleOp(ScriptEvent event)
+	{
+		switch (event.getOp() - 1)
+		{
+			case 0:
+				handleToggleClick();
+				break;
+			case MENU_NEW_TAB - 1:
+				handleNewTabFromToggle();
+				break;
+			default:
+				break;
+		}
+	}
+
+	private void handleNewTabFromToggle()
+	{
+		int tick = client.getTickCount();
+		if (lastNewTabHandledTick == tick)
+		{
+			return;
+		}
+		lastNewTabHandledTick = tick;
+		createBankTab(null);
 	}
 
 	private void setExpandedViewVisible(boolean visible)

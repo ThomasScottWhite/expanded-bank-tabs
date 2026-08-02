@@ -200,10 +200,12 @@ public class ExpandedBankTabsPlugin extends Plugin
 				break;
 			case ScriptID.BANKMAIN_POPUP_TAB_DRAW:
 				// Bank Tags emits this while its sidebar is being repositioned,
-				// including during sidebar scrolling. Rebuilding our whole panel here
-				// makes it flash and can interrupt a drag. Only realign the stable
-				// overlays and reapply the current expanded scroll position.
-				clientThread.invokeLater(this::refreshSidebarLayout);
+				// including during sidebar scrolling. Its layout pass hides every
+				// child after its own tab range, which also includes our expanded
+				// widgets. Restore only those widgets synchronously so they are visible
+				// again before the next frame is rendered; rebuilding here causes a
+				// visible flash and can interrupt a drag.
+				restoreExpandedViewAfterBankTagsLayout();
 				break;
 			default:
 				break;
@@ -439,34 +441,16 @@ public class ExpandedBankTabsPlugin extends Plugin
 		updateToggle();
 	}
 
-	private void refreshSidebarLayout()
+	private void restoreExpandedViewAfterBankTagsLayout()
 	{
-		Widget newParent = client.getWidget(InterfaceID.Bankmain.ITEMS_CONTAINER);
-		if (newParent == null)
+		if (!expandedViewVisible || !config.enabled() || panel == null)
 		{
 			return;
 		}
 
-		if (parent != newParent)
-		{
-			restoreBankItems();
-			removeOwnedWidgets();
-			parent = newParent;
-		}
-
-		ensureToggle();
-		positionToggleOverlay();
-		ensureExpandedScrollbar();
-		if (expandedViewVisible && config.enabled())
-		{
-			updateExpandedTitle();
-			applyExpandedScroll();
-		}
-		else
-		{
-			restoreBankItems();
-			updateToggle();
-		}
+		panel.setHidden(false);
+		panel.revalidate();
+		applyExpandedScroll();
 	}
 
 	private Widget getLiveNewTabWidget()

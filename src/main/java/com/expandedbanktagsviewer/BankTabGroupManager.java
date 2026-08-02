@@ -20,11 +20,12 @@ final class BankTabGroupManager
 	private static final String CONFIG_KEY = "groups";
 	private static final String LEGACY_CONFIG_GROUP = "banktags";
 	private static final String LEGACY_CONFIG_KEY = "expandedGroups";
-	private static final int STORAGE_VERSION = 2;
+	private static final int STORAGE_VERSION = 3;
 
 	private final ConfigManager configManager;
 	private final Gson gson;
 	private final List<BankTabGroup> groups = new ArrayList<>();
+	private final List<String> ungroupedTabs = new ArrayList<>();
 	private int ungroupedIndex;
 
 	@Inject
@@ -37,6 +38,7 @@ final class BankTabGroupManager
 	void reload()
 	{
 		groups.clear();
+		ungroupedTabs.clear();
 		ungroupedIndex = 0;
 		String json = configManager.getConfiguration(CONFIG_GROUP, CONFIG_KEY);
 		if (json == null || json.isEmpty())
@@ -53,7 +55,7 @@ final class BankTabGroupManager
 		try
 		{
 			Storage storage = gson.fromJson(json, Storage.class);
-			if (storage == null || (storage.version != 1 && storage.version != STORAGE_VERSION)
+			if (storage == null || (storage.version != 1 && storage.version != 2 && storage.version != STORAGE_VERSION)
 				|| storage.groups == null)
 			{
 				return;
@@ -79,6 +81,18 @@ final class BankTabGroupManager
 				}
 				group.setTabs(tabs);
 				groups.add(group);
+			}
+
+			if (storage.version == STORAGE_VERSION && storage.ungroupedTabs != null)
+			{
+				for (String tab : storage.ungroupedTabs)
+				{
+					String normalized = normalize(tab);
+					if (normalized != null && !assigned.contains(normalized) && !ungroupedTabs.contains(normalized))
+					{
+						ungroupedTabs.add(normalized);
+					}
+				}
 			}
 
 			ungroupedIndex = storage.version == STORAGE_VERSION && storage.ungroupedIndex != null
@@ -176,6 +190,7 @@ final class BankTabGroupManager
 		{
 			group.getTabs().removeIf(tab -> normalized.equals(normalize(tab)));
 		}
+		ungroupedTabs.removeIf(tab -> normalized.equals(normalize(tab)));
 
 		if (groupId != null)
 		{
@@ -185,7 +200,83 @@ final class BankTabGroupManager
 				target.getTabs().add(normalized);
 			}
 		}
+		else
+		{
+			ungroupedTabs.add(normalized);
+		}
 		save();
+	}
+
+	boolean moveTab(String sourceTag, String targetTag)
+	{
+		String source = normalize(sourceTag);
+		String target = normalize(targetTag);
+		if (source == null || target == null || source.equals(target))
+		{
+			return false;
+		}
+
+		String targetGroupId = getGroupId(target);
+		BankTabGroup targetGroup = targetGroupId == null ? null : find(targetGroupId);
+		if (targetGroupId != null && targetGroup == null)
+		{
+			return false;
+		}
+
+		removeFromGroups(source);
+		if (targetGroupId == null)
+		{
+			if (!ungroupedTabs.contains(target))
+			{
+				ungroupedTabs.add(target);
+			}
+			insertBefore(ungroupedTabs, source, target);
+		}
+		else
+		{
+			int targetIndex = targetGroup.getTabs().indexOf(target);
+			if (targetIndex < 0)
+			{
+				targetGroup.getTabs().add(source);
+			}
+			else
+			{
+				targetGroup.getTabs().add(targetIndex, source);
+			}
+		}
+		save();
+		return true;
+	}
+
+	List<String> orderUngrouped(List<String> availableTags)
+	{
+		List<String> ordered = new ArrayList<>();
+		Set<String> available = new HashSet<>();
+		for (String tag : availableTags)
+		{
+			String normalized = normalize(tag);
+			if (normalized != null)
+			{
+				available.add(normalized);
+			}
+		}
+
+		for (String tag : ungroupedTabs)
+		{
+			if (available.contains(tag) && getGroupId(tag) == null && !ordered.contains(tag))
+			{
+				ordered.add(tag);
+			}
+		}
+		for (String tag : availableTags)
+		{
+			String normalized = normalize(tag);
+			if (normalized != null && getGroupId(normalized) == null && !ordered.contains(normalized))
+			{
+				ordered.add(normalized);
+			}
+		}
+		return ordered;
 	}
 
 	String getGroupId(String tag)
@@ -294,6 +385,13 @@ final class BankTabGroupManager
 				}
 			}
 		}
+		for (int i = 0; i < ungroupedTabs.size(); ++i)
+		{
+			if (oldValue.equals(normalize(ungroupedTabs.get(i))))
+			{
+				ungroupedTabs.set(i, newValue);
+			}
+		}
 		save();
 	}
 
@@ -308,7 +406,31 @@ final class BankTabGroupManager
 		{
 			group.getTabs().removeIf(tab -> normalized.equals(normalize(tab)));
 		}
+		ungroupedTabs.removeIf(tab -> normalized.equals(normalize(tab)));
 		save();
+	}
+
+	private void removeFromGroups(String tag)
+	{
+		for (BankTabGroup group : groups)
+		{
+			group.getTabs().removeIf(tab -> tag.equals(normalize(tab)));
+		}
+		ungroupedTabs.removeIf(tab -> tag.equals(normalize(tab)));
+	}
+
+	private static void insertBefore(List<String> values, String source, String target)
+	{
+		values.removeIf(source::equals);
+		int targetIndex = values.indexOf(target);
+		if (targetIndex < 0)
+		{
+			values.add(source);
+		}
+		else
+		{
+			values.add(targetIndex, source);
+		}
 	}
 
 	private boolean hasName(String name, String ignoredId)
@@ -321,6 +443,7 @@ final class BankTabGroupManager
 	{
 		Storage storage = new Storage();
 		storage.groups = groups;
+		storage.ungroupedTabs = new ArrayList<>(ungroupedTabs);
 		storage.ungroupedIndex = ungroupedIndex;
 		configManager.setConfiguration(CONFIG_GROUP, CONFIG_KEY, gson.toJson(storage));
 	}
@@ -351,6 +474,7 @@ final class BankTabGroupManager
 	{
 		private int version = STORAGE_VERSION;
 		private List<BankTabGroup> groups = new ArrayList<>();
+		private List<String> ungroupedTabs = new ArrayList<>();
 		private Integer ungroupedIndex;
 	}
 }

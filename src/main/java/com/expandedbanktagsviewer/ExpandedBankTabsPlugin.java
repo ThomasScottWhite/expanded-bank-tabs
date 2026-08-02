@@ -357,13 +357,25 @@ public class ExpandedBankTabsPlugin extends Plugin
 		String tag = findMappedAncestor(dragged, tabWidgets);
 		if (tag != null && dropTarget.matched)
 		{
-			String destination = dropTarget.groupId;
-			if (!equalsNullable(groupManager.getGroupId(tag), destination))
+			boolean changed = false;
+			if (dropTarget.tabTag != null)
 			{
-				groupManager.assign(tag, destination);
+				changed = groupManager.moveTab(tag, dropTarget.tabTag);
+			}
+			else
+			{
+				String destination = dropTarget.groupId;
+				if (!equalsNullable(groupManager.getGroupId(tag), destination))
+				{
+					groupManager.assign(tag, destination);
+					changed = true;
+				}
 			}
 			client.setDraggedOnWidget(null);
-			clientThread.invokeLater(this::rebuildExpandedView);
+			if (changed)
+			{
+				clientThread.invokeLater(this::rebuildExpandedView);
+			}
 		}
 	}
 
@@ -1106,6 +1118,7 @@ public class ExpandedBankTabsPlugin extends Plugin
 		// interactive widget, which prevents duplicate right-click menus.
 		Widget icon = createGraphic(parent, target, -1, tab.getIconItemId(),
 			Constants.ITEM_SPRITE_WIDTH, Constants.ITEM_SPRITE_HEIGHT, x + 3, y + 4);
+		tabWidgets.put(icon, tab.getTag());
 		icon.setClickMask(0);
 		icon.setNoClickThrough(false);
 		// The icon is a sibling of the tile background, so it must be registered
@@ -1553,7 +1566,16 @@ public class ExpandedBankTabsPlugin extends Plugin
 
 	private List<BankTab> ungroupedTabs(List<BankTab> tabs)
 	{
-		return tabs.stream().filter(tab -> groupManager.getGroupId(tab.getTag()) == null).collect(Collectors.toList());
+		List<BankTab> available = tabs.stream()
+			.filter(tab -> groupManager.getGroupId(tab.getTag()) == null)
+			.collect(Collectors.toList());
+		List<String> availableTags = available.stream().map(BankTab::getTag).collect(Collectors.toList());
+		List<BankTab> ordered = new ArrayList<>();
+		for (String tag : groupManager.orderUngrouped(availableTags))
+		{
+			available.stream().filter(tab -> tab.getTag().equals(tag)).findFirst().ifPresent(ordered::add);
+		}
+		return ordered;
 	}
 
 	private Widget createGraphic(Widget container, String name, int spriteId, int itemId,
@@ -1605,11 +1627,17 @@ public class ExpandedBankTabsPlugin extends Plugin
 
 	private DropTarget findDropTarget(Widget target)
 	{
+		String tabTag = findMappedAncestor(target, tabWidgets);
+		if (tabTag != null)
+		{
+			return new DropTarget(true, groupManager.getGroupId(tabTag), tabTag);
+		}
+
 		for (Widget current = target; current != null; current = current.getParent())
 		{
 			if (groupDropTargets.containsKey(current))
 			{
-				return new DropTarget(true, groupDropTargets.get(current));
+				return new DropTarget(true, groupDropTargets.get(current), null);
 			}
 		}
 
@@ -1622,12 +1650,21 @@ public class ExpandedBankTabsPlugin extends Plugin
 
 		int localX = mouse.getX() - parentBounds.x;
 		int localY = mouse.getY() - parentBounds.y + expandedScrollOffset;
+		for (Map.Entry<Widget, String> entry : tabWidgets.entrySet())
+		{
+			Rectangle bounds = entry.getKey().getBounds();
+			if (bounds != null && bounds.contains(mouse.getX(), mouse.getY()))
+			{
+				String targetTag = entry.getValue();
+				return new DropTarget(true, groupManager.getGroupId(targetTag), targetTag);
+			}
+		}
 		for (GroupDropArea area : groupDropAreas)
 		{
 			if (localX >= area.x && localX < area.x + area.width
 				&& localY >= area.y && localY < area.y + area.height)
 			{
-				return new DropTarget(true, area.groupId);
+				return new DropTarget(true, area.groupId, null);
 			}
 		}
 		return DropTarget.NONE;
@@ -1826,15 +1863,17 @@ public class ExpandedBankTabsPlugin extends Plugin
 
 	private static final class DropTarget
 	{
-		private static final DropTarget NONE = new DropTarget(false, null);
+		private static final DropTarget NONE = new DropTarget(false, null, null);
 
 		private final boolean matched;
 		private final String groupId;
+		private final String tabTag;
 
-		private DropTarget(boolean matched, String groupId)
+		private DropTarget(boolean matched, String groupId, String tabTag)
 		{
 			this.matched = matched;
 			this.groupId = groupId;
+			this.tabTag = tabTag;
 		}
 	}
 

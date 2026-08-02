@@ -1,4 +1,4 @@
-package com.comfy.expandedbanktabs;
+package com.expandedbanktagsviewer;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonParseException;

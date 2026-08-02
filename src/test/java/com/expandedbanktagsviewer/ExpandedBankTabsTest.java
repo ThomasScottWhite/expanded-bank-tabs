@@ -1,4 +1,4 @@
-package com.comfy.expandedbanktabs;
+package com.expandedbanktagsviewer;
 
 import net.runelite.client.RuneLite;
 import net.runelite.client.externalplugins.ExternalPluginManager;

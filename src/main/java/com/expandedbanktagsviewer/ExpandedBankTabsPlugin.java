@@ -1,4 +1,4 @@
-package com.comfy.expandedbanktabs;
+package com.expandedbanktagsviewer;
 
 import com.google.inject.Provides;
 import java.awt.Color;
@@ -59,7 +59,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 @PluginDescriptor(
-	name = "Expanded Bank Tabs",
+	name = "expandedbanktagsviewer",
 	description = "Organize existing Bank Tags tabs into an expanded, grouped view.",
 	tags = {"bank", "bank tags", "bank tabs", "organization"}
 )
@@ -85,7 +85,7 @@ public class ExpandedBankTabsPlugin extends Plugin
 	private static final String DELETE_GROUP = "Delete bank tab group";
 	private static final String COLLAPSE_GROUP = "Collapse bank tab group";
 	private static final String EXPAND_GROUP = "Expand bank tab group";
-	private static final String EXPANDED_TITLE = "Expanded Bank Tabs";
+	private static final String EXPANDED_TITLE = "expandedbanktagsviewer";
 
 	private static final int TAB_WIDTH = 39;
 	private static final int TAB_HEIGHT = 39;

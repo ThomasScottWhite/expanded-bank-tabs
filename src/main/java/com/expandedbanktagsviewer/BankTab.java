@@ -1,4 +1,4 @@
-package com.comfy.expandedbanktabs;
+package com.expandedbanktagsviewer;
 
 final class BankTab
 {

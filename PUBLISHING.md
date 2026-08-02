@@ -8,7 +8,7 @@
    Tags plugin enabled. Do not load it together with the old source-fork
    implementation because both versions create an expanded-view button.
 4. Fork `runelite/plugin-hub`, create a branch, and add
-   `plugins/expanded-bank-tabs` containing:
+   `plugins/expanded-bank-tags-viewer` containing:
 
    ```properties
    repository=https://github.com/<account>/expanded-bank-tabs.git

@@ -34,7 +34,7 @@ dependencies {
 	}
 }
 
-group = 'com.comfy'
+group = 'com.expandedbanktagsviewer'
 version = '0.1.0-SNAPSHOT'
 
 tasks.withType(JavaCompile).configureEach {
@@ -49,7 +49,7 @@ tasks.register('run', JavaExec) {
 		throw new GradleException('The run task needs -PruneLiteClientJar=<path-to-client-shaded.jar> for local development.')
 	}
 	classpath = sourceSets.test.runtimeClasspath + files(localClientJar.get())
-	mainClass = 'com.comfy.expandedbanktabs.ExpandedBankTabsTest'
+	mainClass = 'com.expandedbanktagsviewer.ExpandedBankTabsTest'
 	jvmArgs '-ea'
 	if (runHome.isPresent()) {
 		systemProperty 'user.home', runHome.get()

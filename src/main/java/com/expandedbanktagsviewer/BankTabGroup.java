@@ -1,4 +1,4 @@
-package com.comfy.expandedbanktabs;
+package com.expandedbanktagsviewer;
 
 import java.util.ArrayList;
 import java.util.List;

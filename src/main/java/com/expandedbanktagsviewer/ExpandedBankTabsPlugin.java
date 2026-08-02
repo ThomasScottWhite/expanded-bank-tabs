@@ -106,6 +106,7 @@ public class ExpandedBankTabsPlugin extends Plugin
 	private static final int MENU_EXPORT = 4;
 	private static final int MENU_RENAME = 5;
 	private static final int MENU_DELETE = 6;
+	private static final int MENU_NEW_TAB = 2;
 	private static final int GROUP_MENU_RENAME = 1;
 	private static final int GROUP_MENU_DELETE = 2;
 	private static final int GROUP_MENU_COLLAPSE = 3;
@@ -296,15 +297,22 @@ public class ExpandedBankTabsPlugin extends Plugin
 	{
 		String option = event.getMenuOption();
 		Widget widget = event.getWidget();
-		if ((widget == toggle || widget == toggleIcon || widget == toggleHitbox || widget == toggleLayer)
-			&& (TOGGLE.equals(option) || NEW_TAB.equals(option)))
+		if (widget == toggle || widget == toggleIcon || widget == toggleHitbox || widget == toggleLayer)
 		{
-			// Handle the overlay through the normal RuneLite menu event. The
-			// underlying Bank Tags + widget is hidden, so neither its New tag action
-			// nor its callback can be selected accidentally.
-			event.consume();
-			clientThread.invokeLater(this::handleToggleClick);
-			return;
+			if (TOGGLE.equals(option))
+			{
+				// Handle the overlay through the normal RuneLite menu event. The
+				// underlying Bank Tags + widget is hidden, so its callback cannot win.
+				event.consume();
+				clientThread.invokeLater(this::handleToggleClick);
+				return;
+			}
+			if (NEW_TAB.equals(option))
+			{
+				event.consume();
+				clientThread.invokeLater(() -> createBankTab(null));
+				return;
+			}
 		}
 
 		if (!expandedViewVisible)
@@ -680,6 +688,7 @@ public class ExpandedBankTabsPlugin extends Plugin
 		toggleHitbox.setItemQuantity(-1);
 		toggleHitbox.setName("");
 		toggleHitbox.setAction(1, TOGGLE);
+		toggleHitbox.setAction(MENU_NEW_TAB, NEW_TAB);
 		toggleHitbox.setHasListener(true);
 		toggleHitbox.setNoClickThrough(true);
 		toggleHitbox.setOnOpListener((JavaScriptCallback) event -> clientThread.invokeLater(this::handleToggleClick));
@@ -707,6 +716,7 @@ public class ExpandedBankTabsPlugin extends Plugin
 		toggle.setHasListener(true);
 		toggle.setNoClickThrough(false);
 		toggleHitbox.setAction(1, TOGGLE);
+		toggleHitbox.setAction(MENU_NEW_TAB, NEW_TAB);
 		toggleHitbox.setHasListener(true);
 		toggleHitbox.setNoClickThrough(true);
 		toggle.setItemId(-1);

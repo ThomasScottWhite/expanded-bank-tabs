@@ -11,6 +11,7 @@ import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import javax.inject.Inject;
@@ -115,6 +116,8 @@ public class ExpandedBankTabsPlugin extends Plugin
 	private final Map<Widget, Integer> scrollBaseY = new IdentityHashMap<>();
 	private final Map<Widget, Boolean> hiddenBankItems = new IdentityHashMap<>();
 	private final List<GroupDropArea> groupDropAreas = new ArrayList<>();
+	private final Set<Widget> expandedLayers = Collections.newSetFromMap(new IdentityHashMap<>());
+	private final Set<Widget> addTabWidgets = Collections.newSetFromMap(new IdentityHashMap<>());
 
 	@Inject
 	private Client client;
@@ -551,6 +554,7 @@ public class ExpandedBankTabsPlugin extends Plugin
 			clearExpandedWidgetReferences();
 			expandedLayer = toggleLayerParent.createChild(-1, WidgetType.LAYER);
 			expandedLayerParent = toggleLayerParent;
+			expandedLayers.add(expandedLayer);
 		}
 
 		Point relativeLocation = getRelativeLocation(parent, toggleLayerParent);
@@ -1145,8 +1149,11 @@ public class ExpandedBankTabsPlugin extends Plugin
 
 	private void createAddTabTile(String groupId, int x, int y)
 	{
-		Widget addTab = createGraphic(parent, NEW_TAB, TabSprites.NEW_TAB.getSpriteId(), -1,
+		// The action is the menu option; leave the widget target empty so RuneLite
+		// does not render the option twice as "New tag tab New tag tab".
+		Widget addTab = createGraphic(parent, "", TabSprites.NEW_TAB.getSpriteId(), -1,
 			TILE_WIDTH, TILE_HEIGHT, x, y);
+		addTabWidgets.add(addTab);
 		addTab.setAction(1, NEW_TAB);
 		addTab.setHasListener(true);
 		addTab.setNoClickThrough(true);
@@ -1792,12 +1799,25 @@ public class ExpandedBankTabsPlugin extends Plugin
 
 	private void removeExpandedWidgets()
 	{
-		// The expanded layer is a dynamic widget container. Remove its dynamic
-		// children through the Widget API before rebuilding so stale add-tab cards
-		// cannot remain visible after a tab is moved between groups.
-		if (expandedLayer != null)
+		// Hide tracked add-tab widgets first so stale menu hitboxes cannot survive
+		// a rebuild, then remove dynamic children from every layer created by this
+		// plugin. The layer registry matters because Bank Tags can rebuild its
+		// parent and leave an older plugin layer detached from the current field.
+		for (Widget addTab : addTabWidgets)
 		{
-			expandedLayer.deleteAllChildren();
+			if (addTab != null)
+			{
+				addTab.setHidden(true);
+			}
+		}
+		for (Widget layer : expandedLayers)
+		{
+			if (layer != null)
+			{
+				layer.deleteAllChildren();
+				layer.setHidden(true);
+				layer.revalidate();
+			}
 		}
 		clearExpandedWidgetReferences();
 	}
@@ -1819,6 +1839,8 @@ public class ExpandedBankTabsPlugin extends Plugin
 		removeToggleOverlay();
 		restoreOriginalNewTab();
 		clearExpandedWidgetReferences();
+		expandedLayers.clear();
+		addTabWidgets.clear();
 	}
 
 	private void restoreBankTitle()

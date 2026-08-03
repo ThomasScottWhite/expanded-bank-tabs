@@ -1,8 +1,6 @@
 # Expanded Bank Tags Viewer
 
-Expanded Bank Tags Viewer gives RuneLite's existing Bank Tags tabs an expanded,
-grouped view. It keeps Bank Tags as the source of truth and adds organization
-tools without replacing the normal bank interface.
+Expanded Bank Tags Viewer adds an expanded interface to manage and view Bank Tags. It keeps Bank Tags as the source of truth and adds organization tools without replacing the normal bank interface.
 
 ## Features
 

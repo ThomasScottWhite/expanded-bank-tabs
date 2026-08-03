@@ -55,11 +55,13 @@ final class ExpandedWidgetSession
 				widgetIdentity(layerParent));
 		}
 
+		int x;
+		int y;
 		Point relative = WidgetGeometry.relativeLocation(bankContent, requestedParent);
 		if (relative != null)
 		{
-			layer.setOriginalX(relative.getX());
-			layer.setOriginalY(relative.getY());
+			x = relative.getX();
+			y = relative.getY();
 		}
 		else
 		{
@@ -71,18 +73,24 @@ final class ExpandedWidgetSession
 					contentLocation, parentLocation);
 				return false;
 			}
-			layer.setOriginalX(contentLocation.getX() - parentLocation.getX());
-			layer.setOriginalY(contentLocation.getY() - parentLocation.getY());
+			x = contentLocation.getX() - parentLocation.getX();
+			y = contentLocation.getY() - parentLocation.getY();
 		}
 
-		layer.setOriginalWidth(Math.max(1, bankContent.getWidth()));
-		layer.setOriginalHeight(Math.max(1, bankContent.getHeight()));
-		layer.setNoClickThrough(false);
-		layer.setHidden(false);
-		layer.revalidate();
-		log.trace("Ensured render layer {} at ({}, {}) size={}x{}",
-			widgetIdentity(layer), layer.getOriginalX(), layer.getOriginalY(),
-			layer.getOriginalWidth(), layer.getOriginalHeight());
+		int width = Math.max(1, bankContent.getWidth());
+		int height = Math.max(1, bankContent.getHeight());
+		if (layer.getOriginalX() != x || layer.getOriginalY() != y
+			|| layer.getOriginalWidth() != width || layer.getOriginalHeight() != height
+			|| layer.getNoClickThrough() || layer.isHidden())
+		{
+			layer.setOriginalX(x);
+			layer.setOriginalY(y);
+			layer.setOriginalWidth(width);
+			layer.setOriginalHeight(height);
+			layer.setNoClickThrough(false);
+			layer.setHidden(false);
+			layer.revalidate();
+		}
 		return true;
 	}
 

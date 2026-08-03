@@ -1,7 +1,6 @@
 package com.expandedbanktagsviewer;
 
 import java.awt.Rectangle;
-import java.util.Arrays;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import net.runelite.api.Client;
@@ -63,7 +62,10 @@ final class ToggleWidgetController
 		Widget liveNewTab = getLiveNewTabWidget(bankContent);
 		if (liveNewTab == null)
 		{
-			removeOverlay();
+			// Bank Tags briefly removes its tab children while rebuilding them.
+			// Keep our layer attached so the next client tick reuses it instead of
+			// appending another hidden dynamic child to the bank interface.
+			hideOverlay();
 			return;
 		}
 		if (originalNewTab != liveNewTab)
@@ -74,18 +76,17 @@ final class ToggleWidgetController
 			originalStateCaptured = true;
 		}
 
-		originalNewTab.setHidden(enabled && originalStateCaptured ? true : originalHidden);
-		originalNewTab.revalidate();
+		setHidden(originalNewTab, enabled || originalHidden);
 		if (!enabled)
 		{
-			removeOverlay();
+			hideOverlay();
 			return;
 		}
 
 		Widget newLayerParent = findLayerParent(bankContent);
 		if (newLayerParent == null)
 		{
-			removeOverlay();
+			hideOverlay();
 			return;
 		}
 		if (layerParent != newLayerParent)
@@ -143,8 +144,7 @@ final class ToggleWidgetController
 		this.expanded = expanded;
 		if (originalNewTab != null && originalStateCaptured)
 		{
-			originalNewTab.setHidden(enabled);
-			originalNewTab.revalidate();
+			setHidden(originalNewTab, enabled || originalHidden);
 		}
 		update();
 	}
@@ -163,17 +163,13 @@ final class ToggleWidgetController
 		{
 			return;
 		}
-		Widget[] layerChildren = layerParent.getChildren();
-		boolean layerAttached = layer != null && layerChildren != null
-			&& Arrays.stream(layerChildren).anyMatch(child -> child == layer);
-		Widget[] children = layer == null ? null : layer.getChildren();
-		boolean childrenAttached = background != null && icon != null && hitbox != null && children != null
-			&& Arrays.stream(children).anyMatch(child -> child == background)
-			&& Arrays.stream(children).anyMatch(child -> child == icon)
-			&& Arrays.stream(children).anyMatch(child -> child == hitbox);
-		if (layerAttached && childrenAttached)
+		// Dynamic widget layers are not reliably reported through getChildren().
+		// Treat this controller's references as authoritative for the lifetime of
+		// the bank interface. WidgetClosed resets them when that lifetime ends.
+		// Checking getChildren() here caused a new layer and five new callbacks to
+		// be appended on every ClientTick even though the existing layer was live.
+		if (layer != null && background != null && icon != null && hitbox != null)
 		{
-			configure();
 			return;
 		}
 
@@ -230,42 +226,24 @@ final class ToggleWidgetController
 		layer.revalidate();
 	}
 
-	private void configure()
-	{
-		background.setName("");
-		background.setHasListener(true);
-		background.setNoClickThrough(false);
-		background.setItemId(-1);
-		background.setItemQuantity(-1);
-		background.setBorderType(0);
-		icon.setItemId(ItemID.BCS_CHEST);
-		icon.setItemQuantity(-1);
-		icon.setClickMask(0);
-		icon.setNoClickThrough(false);
-		hitbox.setAction(TOGGLE_OP, TOGGLE_OPTION);
-		hitbox.setAction(NEW_TAB_OP, NEW_TAB_OPTION);
-		hitbox.setHasListener(true);
-		hitbox.setNoClickThrough(true);
-		update();
-	}
-
 	private void update()
 	{
-		if (background == null)
+		if (layer == null || background == null || icon == null || hitbox == null)
 		{
 			return;
 		}
 		boolean hidden = !enabled;
-		layer.setHidden(hidden);
-		background.setHidden(hidden);
-		icon.setHidden(hidden);
-		hitbox.setHidden(hidden);
-		background.setSpriteId(expanded
-			? TabSprites.TAB_BACKGROUND_ACTIVE.getSpriteId() : TabSprites.TAB_BACKGROUND.getSpriteId());
-		background.revalidate();
-		icon.revalidate();
-		hitbox.revalidate();
-		layer.revalidate();
+		setHidden(layer, hidden);
+		setHidden(background, hidden);
+		setHidden(icon, hidden);
+		setHidden(hitbox, hidden);
+		int spriteId = expanded
+			? TabSprites.TAB_BACKGROUND_ACTIVE.getSpriteId() : TabSprites.TAB_BACKGROUND.getSpriteId();
+		if (background.getSpriteId() != spriteId)
+		{
+			background.setSpriteId(spriteId);
+			background.revalidate();
+		}
 	}
 
 	private void setActiveSprite()
@@ -286,8 +264,7 @@ final class ToggleWidgetController
 		Point relative = WidgetGeometry.relativeLocation(originalNewTab, layerParent);
 		if (relative != null)
 		{
-			layer.setOriginalX(relative.getX());
-			layer.setOriginalY(relative.getY());
+			position(relative.getX(), relative.getY());
 		}
 		else
 		{
@@ -297,12 +274,33 @@ final class ToggleWidgetController
 			{
 				return;
 			}
-			layer.setOriginalX(buttonLocation.getX() - parentLocation.getX());
-			layer.setOriginalY(buttonLocation.getY() - parentLocation.getY());
+			position(buttonLocation.getX() - parentLocation.getX(),
+				buttonLocation.getY() - parentLocation.getY());
 		}
+	}
+
+	private void position(int x, int y)
+	{
+		if (layer.getOriginalX() == x && layer.getOriginalY() == y
+			&& layer.getOriginalWidth() == ExpandedViewLayout.TAB_WIDTH
+			&& layer.getOriginalHeight() == ExpandedViewLayout.TAB_HEIGHT)
+		{
+			return;
+		}
+		layer.setOriginalX(x);
+		layer.setOriginalY(y);
 		layer.setOriginalWidth(ExpandedViewLayout.TAB_WIDTH);
 		layer.setOriginalHeight(ExpandedViewLayout.TAB_HEIGHT);
 		layer.revalidate();
+	}
+
+	private static void setHidden(Widget widget, boolean hidden)
+	{
+		if (widget.isHidden() != hidden)
+		{
+			widget.setHidden(hidden);
+			widget.revalidate();
+		}
 	}
 
 	private Widget getLiveNewTabWidget(Widget bankContent)
@@ -325,8 +323,7 @@ final class ToggleWidgetController
 	{
 		if (originalNewTab != null && originalStateCaptured)
 		{
-			originalNewTab.setHidden(originalHidden);
-			originalNewTab.revalidate();
+			setHidden(originalNewTab, originalHidden);
 		}
 		originalNewTab = null;
 		originalStateCaptured = false;
@@ -334,16 +331,20 @@ final class ToggleWidgetController
 
 	private void removeOverlay()
 	{
-		if (layer != null)
-		{
-			layer.setHidden(true);
-			layer.revalidate();
-		}
+		hideOverlay();
 		layer = null;
 		background = null;
 		icon = null;
 		hitbox = null;
 		layerParent = null;
+	}
+
+	private void hideOverlay()
+	{
+		if (layer != null)
+		{
+			setHidden(layer, true);
+		}
 	}
 
 	private void handleOperation(ScriptEvent event)

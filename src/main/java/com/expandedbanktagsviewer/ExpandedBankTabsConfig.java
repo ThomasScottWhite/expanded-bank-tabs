@@ -17,4 +17,15 @@ public interface ExpandedBankTabsConfig extends Config
 	{
 		return true;
 	}
+
+	@ConfigItem(
+		keyName = "expandedViewOpen",
+		name = "Expanded view open",
+		description = "Whether the expanded bank tabs view was open during the previous bank session.",
+		hidden = true
+	)
+	default boolean expandedViewOpen()
+	{
+		return false;
+	}
 }

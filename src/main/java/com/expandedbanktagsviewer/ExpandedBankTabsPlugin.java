@@ -34,6 +34,14 @@ public class ExpandedBankTabsPlugin extends Plugin
 {
 	private static final Logger log = LoggerFactory.getLogger(ExpandedBankTabsPlugin.class);
 	private static final String BANKTAGS_GROUP = "banktags";
+	private static final String CONFIG_GROUP = "expandedbanktabs";
+	private static final String BANKTAGS_TABS_KEY = "tagtabs";
+	private static final String BANKTAGS_ICON_PREFIX = "icon_";
+	private static final String BANKTAGS_LAYOUT_PREFIX = "layout_";
+	private static final String LEGACY_GROUPS_KEY = "expandedGroups";
+	private static final String GROUPS_KEY = "groups";
+	private static final String ENABLED_KEY = "enabled";
+	private static final String EXPANDED_VIEW_OPEN_KEY = "expandedViewOpen";
 	private static final String EXPANDED_TITLE = "Expanded Bank Tags Viewer";
 
 	private final ExpandedWidgetRegistry widgetRegistry = new ExpandedWidgetRegistry();
@@ -88,6 +96,7 @@ public class ExpandedBankTabsPlugin extends Plugin
 	private int renderedBankWidth;
 	private int renderedBankHeight;
 	private boolean expandedRebuildQueued;
+	private boolean refreshQueued;
 	private boolean postDragRebuildQueued;
 	private boolean rebuildDeferralLogged;
 	private int renderGeneration;
@@ -168,7 +177,7 @@ public class ExpandedBankTabsPlugin extends Plugin
 		log.debug("Stopping Expanded Bank Tabs; visible={}, generation={}",
 			expandedViewVisible, renderGeneration);
 		sidebarRefresher.reset();
-		setExpandedViewVisible(false);
+		setExpandedViewVisible(false, false);
 		restoreBankItems();
 		removeOwnedWidgets();
 		parent = null;
@@ -190,7 +199,7 @@ public class ExpandedBankTabsPlugin extends Plugin
 			case ScriptID.BANKMAIN_INIT:
 			case ScriptID.BANKMAIN_FINISHBUILDING:
 			case ScriptID.BANKMAIN_SIZE_CHECK:
-				clientThread.invokeLater(this::refresh);
+				requestRefresh();
 				break;
 			case ScriptID.BANKMAIN_POPUP_TAB_DRAW:
 				// Bank Tags emits this while its sidebar is being repositioned,
@@ -252,17 +261,37 @@ public class ExpandedBankTabsPlugin extends Plugin
 	@Subscribe
 	public void onConfigChanged(ConfigChanged event)
 	{
-		if (BANKTAGS_GROUP.equals(event.getGroup()) || "expandedbanktabs".equals(event.getGroup()))
+		if (!isViewConfigChange(event))
 		{
-			log.debug("Relevant config changed: group={}, key={}; reloading model",
-				event.getGroup(), event.getKey());
-			groupManager.reload();
-			clientThread.invokeLater(() ->
-			{
-				refresh();
-				requestExpandedViewRebuild();
-			});
+			return;
 		}
+
+		log.debug("View config changed: group={}, key={}; reloading model",
+			event.getGroup(), event.getKey());
+		groupManager.reload();
+		clientThread.invokeLater(() ->
+		{
+			refresh();
+			requestExpandedViewRebuild();
+		});
+	}
+
+	private static boolean isViewConfigChange(ConfigChanged event)
+	{
+		String group = event.getGroup();
+		String key = event.getKey();
+		if (BANKTAGS_GROUP.equals(group))
+		{
+			return key != null && (BANKTAGS_TABS_KEY.equals(key)
+				|| LEGACY_GROUPS_KEY.equals(key)
+				|| key.startsWith(BANKTAGS_ICON_PREFIX)
+				|| key.startsWith(BANKTAGS_LAYOUT_PREFIX));
+		}
+		if (CONFIG_GROUP.equals(group))
+		{
+			return GROUPS_KEY.equals(key) || ENABLED_KEY.equals(key);
+		}
+		return false;
 	}
 
 	@Subscribe
@@ -346,6 +375,11 @@ public class ExpandedBankTabsPlugin extends Plugin
 			restoreBankItems();
 			removeOwnedWidgets();
 			parent = newParent;
+			if (config.enabled() && !expandedViewVisible && config.expandedViewOpen())
+			{
+				log.debug("Restoring expanded view from the previous bank session");
+				setExpandedViewVisible(true, false);
+			}
 		}
 
 		toggleController.maintain(parent, config.enabled(), expandedViewVisible, toggleListener);
@@ -389,6 +423,20 @@ public class ExpandedBankTabsPlugin extends Plugin
 		widgetSession.restoreLayerAfterBankTagsLayout(panel, this::applyExpandedScroll);
 	}
 
+	private void requestRefresh()
+	{
+		if (refreshQueued)
+		{
+			return;
+		}
+		refreshQueued = true;
+		clientThread.invokeLater(() ->
+		{
+			refreshQueued = false;
+			refresh();
+		});
+	}
+
 	private boolean ensureExpandedLayer()
 	{
 		return widgetSession.ensureLayer(parent, toggleController.getLayerParent(), expandedViewVisible,
@@ -420,10 +468,15 @@ public class ExpandedBankTabsPlugin extends Plugin
 		setExpandedViewVisible(!expandedViewVisible);
 		// Bank Tags may finish rebuilding its sidebar after the toggle callback
 		// returns. Reapply the chest action after that rebuild as well.
-		clientThread.invokeLater(this::refresh);
+		requestRefresh();
 	}
 
 	private void setExpandedViewVisible(boolean visible)
+	{
+		setExpandedViewVisible(visible, true);
+	}
+
+	private void setExpandedViewVisible(boolean visible, boolean rememberState)
 	{
 		if (visible == expandedViewVisible && (!visible || panel != null))
 		{
@@ -448,6 +501,10 @@ public class ExpandedBankTabsPlugin extends Plugin
 		}
 
 		expandedViewVisible = visible;
+		if (rememberState)
+		{
+			configManager.setConfiguration(CONFIG_GROUP, EXPANDED_VIEW_OPEN_KEY, visible);
+		}
 		expandedScrollOffset = 0;
 		if (visible)
 		{

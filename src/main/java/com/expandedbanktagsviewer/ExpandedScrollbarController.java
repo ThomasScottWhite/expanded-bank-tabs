@@ -70,8 +70,7 @@ final class ExpandedScrollbarController
 		Point relative = WidgetGeometry.relativeLocation(bankScrollbar, layerParent);
 		if (relative != null)
 		{
-			input.setOriginalX(relative.getX());
-			input.setOriginalY(relative.getY());
+		position(relative.getX(), relative.getY(), bankScrollbar.getWidth(), bankScrollbar.getHeight());
 		}
 		else
 		{
@@ -81,11 +80,26 @@ final class ExpandedScrollbarController
 			{
 				return;
 			}
-			input.setOriginalX(scrollbarLocation.getX() - parentLocation.getX());
-			input.setOriginalY(scrollbarLocation.getY() - parentLocation.getY());
+			position(scrollbarLocation.getX() - parentLocation.getX(),
+				scrollbarLocation.getY() - parentLocation.getY(),
+				bankScrollbar.getWidth(), bankScrollbar.getHeight());
 		}
-		input.setOriginalWidth(Math.max(1, bankScrollbar.getWidth()));
-		input.setOriginalHeight(Math.max(1, bankScrollbar.getHeight()));
+	}
+
+	private void position(int x, int y, int width, int height)
+	{
+		width = Math.max(1, width);
+		height = Math.max(1, height);
+		if (input.getOriginalX() == x && input.getOriginalY() == y
+			&& input.getOriginalWidth() == width && input.getOriginalHeight() == height
+			&& !input.isHidden())
+		{
+			return;
+		}
+		input.setOriginalX(x);
+		input.setOriginalY(y);
+		input.setOriginalWidth(width);
+		input.setOriginalHeight(height);
 		input.setHidden(false);
 		input.revalidate();
 	}
@@ -109,8 +123,11 @@ final class ExpandedScrollbarController
 	{
 		if (input != null)
 		{
-			input.setHidden(true);
-			input.revalidate();
+			if (!input.isHidden())
+			{
+				input.setHidden(true);
+				input.revalidate();
+			}
 		}
 	}
 

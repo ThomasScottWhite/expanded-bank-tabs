@@ -5,6 +5,7 @@ import com.google.gson.JsonParseException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -12,10 +13,13 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.util.Text;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Singleton
 final class BankTabGroupManager
 {
+	private static final Logger log = LoggerFactory.getLogger(BankTabGroupManager.class);
 	private static final String CONFIG_GROUP = "expandedbanktabs";
 	private static final String CONFIG_KEY = "groups";
 	private static final String LEGACY_CONFIG_GROUP = "banktags";
@@ -37,6 +41,7 @@ final class BankTabGroupManager
 
 	void reload()
 	{
+		log.debug("Reloading expanded bank-tab groups from configuration");
 		groups.clear();
 		ungroupedTabs.clear();
 		ungroupedIndex = 0;
@@ -49,6 +54,7 @@ final class BankTabGroupManager
 
 		if (json == null || json.isEmpty())
 		{
+			log.debug("No expanded group configuration was found");
 			return;
 		}
 
@@ -98,9 +104,12 @@ final class BankTabGroupManager
 			ungroupedIndex = storage.version == STORAGE_VERSION && storage.ungroupedIndex != null
 				? storage.ungroupedIndex : groups.size();
 			ungroupedIndex = Math.max(0, Math.min(groups.size(), ungroupedIndex));
+			log.debug("Loaded {} groups, {} explicitly ordered ungrouped tabs, ungroupedIndex={}",
+				groups.size(), ungroupedTabs.size(), ungroupedIndex);
 		}
 		catch (JsonParseException | IllegalStateException ex)
 		{
+			log.warn("Unable to parse expanded bank-tab groups", ex);
 			groups.clear();
 		}
 	}
@@ -183,8 +192,10 @@ final class BankTabGroupManager
 		String normalized = normalize(tag);
 		if (normalized == null)
 		{
+			log.debug("Ignoring assignment for blank tab name");
 			return;
 		}
+		log.debug("Assigning normalized tab '{}' to group {}", normalized, groupId);
 
 		for (BankTabGroup group : groups)
 		{
@@ -213,6 +224,7 @@ final class BankTabGroupManager
 		String target = normalize(targetTag);
 		if (source == null || target == null || source.equals(target))
 		{
+			log.debug("Ignoring invalid tab move: source='{}', target='{}'", source, target);
 			return false;
 		}
 
@@ -223,6 +235,8 @@ final class BankTabGroupManager
 			return false;
 		}
 		String sourceGroupId = getGroupId(source);
+		log.debug("Moving tab '{}' from group {} relative to '{}' in group {}",
+			source, sourceGroupId, target, targetGroupId);
 		if (equalsNullable(sourceGroupId, targetGroupId))
 		{
 			if (targetGroup == null)
@@ -272,7 +286,6 @@ final class BankTabGroupManager
 
 	List<String> orderUngrouped(List<String> availableTags)
 	{
-		List<String> ordered = new ArrayList<>();
 		Set<String> available = new HashSet<>();
 		for (String tag : availableTags)
 		{
@@ -283,9 +296,10 @@ final class BankTabGroupManager
 			}
 		}
 
+		Set<String> ordered = new LinkedHashSet<>();
 		for (String tag : ungroupedTabs)
 		{
-			if (available.contains(tag) && getGroupId(tag) == null && !ordered.contains(tag))
+			if (available.contains(tag))
 			{
 				ordered.add(tag);
 			}
@@ -293,12 +307,12 @@ final class BankTabGroupManager
 		for (String tag : availableTags)
 		{
 			String normalized = normalize(tag);
-			if (normalized != null && getGroupId(normalized) == null && !ordered.contains(normalized))
+			if (normalized != null)
 			{
 				ordered.add(normalized);
 			}
 		}
-		return ordered;
+		return new ArrayList<>(ordered);
 	}
 
 	String getGroupId(String tag)
@@ -321,6 +335,7 @@ final class BankTabGroupManager
 
 	void move(String sourceId, String destinationId)
 	{
+		log.debug("Moving group {} relative to group {}", sourceId, destinationId);
 		if (sourceId == null && destinationId == null)
 		{
 			return;
@@ -343,6 +358,8 @@ final class BankTabGroupManager
 		int destinationIndex = indexOfGroup(order, destinationId);
 		if (sourceIndex < 0 || destinationIndex < 0 || sourceIndex == destinationIndex)
 		{
+			log.debug("Group move is a no-op: sourceIndex={}, destinationIndex={}",
+				sourceIndex, destinationIndex);
 			return;
 		}
 
@@ -483,7 +500,10 @@ final class BankTabGroupManager
 		storage.groups = groups;
 		storage.ungroupedTabs = new ArrayList<>(ungroupedTabs);
 		storage.ungroupedIndex = ungroupedIndex;
-		configManager.setConfiguration(CONFIG_GROUP, CONFIG_KEY, gson.toJson(storage));
+		String json = gson.toJson(storage);
+		log.debug("Persisting expanded groups: groups={}, ungroupedTabs={}, ungroupedIndex={}, bytes={}",
+			groups.size(), ungroupedTabs.size(), ungroupedIndex, json.length());
+		configManager.setConfiguration(CONFIG_GROUP, CONFIG_KEY, json);
 	}
 
 	private static int indexOfGroup(List<String> order, String groupId)

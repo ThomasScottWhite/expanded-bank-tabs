@@ -11,8 +11,6 @@ import javax.inject.Singleton;
 import net.runelite.api.gameval.ItemID;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.plugins.banktags.BankTagsService;
-import net.runelite.client.plugins.banktags.tabs.TabManager;
-import net.runelite.client.plugins.banktags.tabs.TagTab;
 import net.runelite.client.util.Text;
 
 /**
@@ -31,14 +29,12 @@ final class BankTagsAdapter
 
 	private final ConfigManager configManager;
 	private final BankTagsService bankTagsService;
-	private final TabManager tabManager;
 
 	@Inject
-	BankTagsAdapter(ConfigManager configManager, BankTagsService bankTagsService, TabManager tabManager)
+	BankTagsAdapter(ConfigManager configManager, BankTagsService bankTagsService)
 	{
 		this.configManager = configManager;
 		this.bankTagsService = bankTagsService;
-		this.tabManager = tabManager;
 	}
 
 	List<BankTab> loadTabs()
@@ -85,30 +81,23 @@ final class BankTagsAdapter
 	String createTab(String name)
 	{
 		String tag = normalize(name);
-		if (tag.isEmpty() || tabManager.find(tag) != null)
+		List<String> tabs = loadTabs().stream().map(BankTab::getTag).collect(Collectors.toList());
+		if (tag.isEmpty() || tabs.contains(tag))
 		{
 			return null;
 		}
 
-		TagTab newTab = new TagTab();
-		newTab.setTag(tag);
-		newTab.setIconItemId(ItemID.SPADE);
-		tabManager.add(newTab);
-		tabManager.save();
+		// TabManager is private to Bank Tags. Preserve its persisted order instead
+		// of injecting a separate manager whose empty cache would replace it.
+		tabs.add(tag);
+		configManager.setConfiguration(CONFIG_GROUP, ICON_PREFIX + tag, ItemID.SPADE);
+		configManager.setConfiguration(CONFIG_GROUP, TABS_KEY, Text.toCSV(tabs));
 		return tag;
 	}
 
 	void setIcon(String tag, int itemId)
 	{
 		String normalized = normalize(tag);
-		TagTab tab = tabManager.find(normalized);
-		if (tab != null)
-		{
-			tab.setIconItemId(itemId);
-			tabManager.save();
-			return;
-		}
-
 		configManager.setConfiguration(CONFIG_GROUP, ICON_PREFIX + normalized, itemId);
 	}
 

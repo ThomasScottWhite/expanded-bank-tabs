@@ -17,26 +17,30 @@ final class BankTagsSidebarRefresher
 	private static final Logger log = LoggerFactory.getLogger(BankTagsSidebarRefresher.class);
 
 	private final ClientThread clientThread;
-	private final BankTagsPlugin bankTagsPlugin;
 	private final PluginManager pluginManager;
 	private boolean pending;
 	private int generation;
 
 	@Inject
-	BankTagsSidebarRefresher(ClientThread clientThread, BankTagsPlugin bankTagsPlugin,
-		PluginManager pluginManager)
+	BankTagsSidebarRefresher(ClientThread clientThread, PluginManager pluginManager)
 	{
 		this.clientThread = clientThread;
-		this.bankTagsPlugin = bankTagsPlugin;
 		this.pluginManager = pluginManager;
 	}
 
 	void refresh(Runnable beforeRestart, Runnable afterRestart)
 	{
+		// Bank Tags exports services, not its plugin instance. Resolve the loaded
+		// instance through PluginManager so Guice cannot construct another one.
+		BankTagsPlugin bankTagsPlugin = pluginManager.getPlugins().stream()
+			.filter(BankTagsPlugin.class::isInstance)
+			.map(BankTagsPlugin.class::cast)
+			.findFirst().orElse(null);
+		boolean active = bankTagsPlugin != null && pluginManager.isPluginActive(bankTagsPlugin);
 		log.debug("Sidebar refresh requested: pending={}, bankTagsActive={}, generation={}",
-			pending, pluginManager.isPluginActive(bankTagsPlugin), generation);
+			pending, active, generation);
 		beforeRestart.run();
-		if (pending || !pluginManager.isPluginActive(bankTagsPlugin))
+		if (pending || !active)
 		{
 			log.debug("Skipping Bank Tags restart; queueing plugin widget refresh only");
 			clientThread.invokeLater(afterRestart);
@@ -46,7 +50,7 @@ final class BankTagsSidebarRefresher
 		pending = true;
 		int requestGeneration = generation;
 		log.debug("Scheduling Bank Tags restart for generation {}", requestGeneration);
-		SwingUtilities.invokeLater(() -> restart(requestGeneration, afterRestart));
+		SwingUtilities.invokeLater(() -> restart(bankTagsPlugin, requestGeneration, afterRestart));
 	}
 
 	void reset()
@@ -56,7 +60,7 @@ final class BankTagsSidebarRefresher
 		generation++;
 	}
 
-	private void restart(int requestGeneration, Runnable afterRestart)
+	private void restart(BankTagsPlugin bankTagsPlugin, int requestGeneration, Runnable afterRestart)
 	{
 		if (requestGeneration != generation)
 		{

@@ -20,6 +20,9 @@ def runProfile = providers.gradleProperty('runeLiteProfile').orElse('expanded-ba
 def runHome = providers.gradleProperty('runeLiteHome')
 
 dependencies {
+	testImplementation 'junit:junit:4.13.2'
+	testImplementation 'org.mockito:mockito-core:4.11.0'
+
 	// Local development can compile against the shaded client produced by the
 	// RuneLite fork. Plugin Hub replaces this with its normal client dependency.
 	if (localClientClasses.isPresent()) {
